@@ -1,23 +1,25 @@
-// File: StickmanCharacter.java
-// Phiên bản này tương thích hoàn toàn với file GameScreen bạn đã cung cấp.
 package org.KeyyH.stickmanfighter.client.game.models;
 
+import org.KeyyH.stickmanfighter.client.game.animation.Pose;
 import org.KeyyH.stickmanfighter.client.gui.GameScreen;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.BasicStroke;
 import java.awt.geom.Point2D;
+import java.util.ArrayList;
+import java.util.List;
 
 public class StickmanCharacter {
     public double rootX, rootY;
     private Color characterColor;
     private float lineWidth = 6f;
+    private double speedX = 6.0; // Tốc độ di chuyển ngang
 
     // Kích thước
-    private final double headRadius = 15;
+    private final double headRadius = 17;
     private final double torsoLength = 60;
-    private final double neckLength = 15;
+    private final double neckLength = 17;
     private final double shoulderWidthFromBodyCenter = 2; // Bạn đã khôi phục lại vai
     private final double upperArmLength = 40;
     private final double lowerArmLength = 35;
@@ -49,6 +51,11 @@ public class StickmanCharacter {
     private double currentVerticalSpeed = 0;
     private int groundLevel;
 
+    private List<Pose> runCycleKeyframes;
+    private int currentRunFrame = 0;
+    private long lastFrameTime = 0;
+    private final int TIME_PER_RUN_FRAME = 40; // 120ms mỗi "ảnh", càng nhỏ càng nhanh
+
     public StickmanCharacter(double rootX, double rootY, Color characterColor) {
         this.rootX = rootX;
         this.rootY = rootY;
@@ -61,7 +68,46 @@ public class StickmanCharacter {
         kneeL = new Point2D.Double(); footL = new Point2D.Double();
         kneeR = new Point2D.Double(); footR = new Point2D.Double();
 
+        initializeKeyframes();
         setToIdlePose();
+    }
+
+    private void initializeKeyframes() {
+        runCycleKeyframes = new ArrayList<>();
+        
+        // Keyframe 1:
+        runCycleKeyframes.add(new Pose(40, 0,  135, -20, 0, -110, 135, 10, 20, 80));
+        
+        // Keyframe 2:
+        runCycleKeyframes.add(new Pose(40, 0,  125, -40, 30, -110, 125, 20, 35, 90));
+        
+        // Keyframe 3:
+        runCycleKeyframes.add(new Pose(40, 0,  115, -90, 70, -110,   100, 40,   50, 70));
+
+        //keyframe 0:
+        runCycleKeyframes.add(new Pose(40, 0,  100, -110, 100, -110,   70, 50,   70, 50));
+
+        // Keyframe 4: != frame 3
+        runCycleKeyframes.add(new Pose(40, 0,  70, -110, 115, -90,   50, 70,   100, 40));
+
+        // Keyframe 5: != frame 2
+        runCycleKeyframes.add(new Pose(40, 0,  30, -110, 125, -40,   35, 90,   125, 20));
+        
+        // Keyframe 6: != frame 1
+        runCycleKeyframes.add(new Pose(40, 0,  0, -110, 135, -20, 20, 80, 135, 10));
+    }
+
+    private void applyPose(Pose pose) {
+        this.torsoAngle = pose.torso;
+        this.neckAngle = pose.neck;
+        this.shoulderLAngle = pose.shoulderL;
+        this.elbowLAngle = pose.elbowL;
+        this.shoulderRAngle = pose.shoulderR;
+        this.elbowRAngle = pose.elbowR;
+        this.hipLAngle = pose.hipL;
+        this.kneeLAngle = pose.kneeL;
+        this.hipRAngle = pose.hipR;
+        this.kneeRAngle = pose.kneeR;
     }
 
     public void setToIdlePose() {
@@ -80,25 +126,7 @@ public class StickmanCharacter {
     }
 
     public void update(GameScreen.InputHandler inputHandler, int screenWidth, int screenHeight) {
-    // --- 1. Xử lý Input và cập nhật góc (Animation) ---
-        if (inputHandler.isMoveLeft() || inputHandler.isMoveRight()) {
-            this.torsoAngle = Math.toRadians(15);
-            double time = System.currentTimeMillis() / 60.0;
-            double hipSwingAmplitude = Math.toRadians(35);
-            double shoulderSwingAmplitude = Math.toRadians(40);
-            this.hipLAngle = Math.toRadians(115) + Math.sin(time) * hipSwingAmplitude;
-            this.hipRAngle = Math.toRadians(65) - Math.sin(time) * hipSwingAmplitude;
-            this.shoulderLAngle = Math.toRadians(125) - Math.sin(time) * shoulderSwingAmplitude;
-            this.shoulderRAngle = Math.toRadians(55) + Math.sin(time) * shoulderSwingAmplitude;
-        } else {
-            this.torsoAngle = 0;
-            if (!isJumping) {
-                setToIdlePose();
-            }
-        }
-
-        // --- 2. Cập nhật vật lý (Di chuyển & Trọng lực) ---
-        double speedX = 4.0;
+        // --- 1. Xử lý vật lý (Di chuyển & Trọng lực) ---
         if (inputHandler.isMoveLeft()) rootX -= speedX;
         if (inputHandler.isMoveRight()) rootX += speedX;
 
@@ -106,21 +134,42 @@ public class StickmanCharacter {
             isJumping = true;
             currentVerticalSpeed = jumpInitialSpeed;
         }
-
         rootY += currentVerticalSpeed;
         currentVerticalSpeed += gravity;
+        
+        // --- 2. Xử lý animation và trạng thái ---
+        if (inputHandler.isMoveLeft() || inputHandler.isMoveRight()) {
+            if (!isJumping) { // Chỉ chạy animation chạy khi đang trên mặt đất
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastFrameTime > TIME_PER_RUN_FRAME) {
+                    // Đã đến lúc chuyển sang keyframe tiếp theo
+                    lastFrameTime = currentTime;
+                    currentRunFrame = (currentRunFrame + 1) % runCycleKeyframes.size(); // Quay vòng animation
+                    applyPose(runCycleKeyframes.get(currentRunFrame));
+                }
+            }
+        } else {
+            // Nếu không di chuyển, quay về tư thế nghỉ
+            currentRunFrame = 0; // Reset animation để lần chạy tiếp theo bắt đầu từ frame đầu
+            if (!isJumping) {
+                setToIdlePose();
+            }
+        }
 
-        // --- 3. Cập nhật lại toàn bộ "bộ xương" với vị trí và góc mới ---
+        // --- 3. Cập nhật lại toàn bộ "bộ xương" và xử lý va chạm ---
         updatePointsFromAngles();
-
-        // --- 4. Kiểm tra và xử lý va chạm đất bằng tọa độ bàn chân ---
+        handleGroundCollision();
+    }
+    
+    // --- PHƯƠNG THỨC TIỆN ÍCH ĐÃ ĐƯỢC THÊM VÀO ---
+    private void handleGroundCollision() {
         // Tìm xem bàn chân nào ở vị trí thấp nhất
         double deepestFootY = Math.max(footL.y, footR.y);
 
         // Nếu có một bàn chân đi xuyên qua mặt đất
-        if (deepestFootY > this.groundLevel) {
+        if (deepestFootY > groundLevel) {
             // Tính toán độ lún
-            double penetration = deepestFootY - this.groundLevel;
+            double penetration = deepestFootY - groundLevel;
 
             // Dịch chuyển TOÀN BỘ nhân vật lên trên một khoảng bằng độ lún
             this.rootY -= penetration;
@@ -130,11 +179,12 @@ public class StickmanCharacter {
 
             // Dừng trạng thái nhảy và reset vận tốc rơi
             isJumping = false;
-            currentVerticalSpeed = 0;
+            if (currentVerticalSpeed > 0){
+                currentVerticalSpeed = 0;
+            }
         }
     }
-    
-    // --- PHƯƠNG THỨC TIỆN ÍCH ĐÃ ĐƯỢC THÊM VÀO ---
+
     private Point2D.Double calculateEndPoint(Point2D.Double start, double length, double angle) {
         double endX = start.x + length * Math.cos(angle);
         double endY = start.y + length * Math.sin(angle);
@@ -165,19 +215,24 @@ public class StickmanCharacter {
         g2d.setColor(this.characterColor);
         g2d.setStroke(new BasicStroke(this.lineWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
+        g2d.setColor(Color.BLUE);
+        g2d.drawLine((int) neck.x, (int) neck.y, (int) shoulderL.x, (int) shoulderL.y);
+        g2d.drawLine((int) shoulderL.x, (int) shoulderL.y, (int) elbowL.x, (int) elbowL.y);
+        g2d.drawLine((int) elbowL.x, (int) elbowL.y, (int) wristL.x, (int) wristL.y);
+        g2d.drawLine((int) hip.x, (int) hip.y, (int) kneeL.x, (int) kneeL.y);
+        g2d.drawLine((int) kneeL.x, (int) kneeL.y, (int) footL.x, (int) footL.y);
+
+        g2d.setColor(this.characterColor);
         // Giờ đây draw() chỉ có nhiệm vụ nối các điểm đã được tính toán sẵn
         g2d.drawLine((int) hip.x, (int) hip.y, (int) neck.x, (int) neck.y);
         g2d.drawLine((int) neck.x, (int) neck.y, (int) headCenter.x, (int) headCenter.y);
-        g2d.drawLine((int) neck.x, (int) neck.y, (int) shoulderL.x, (int) shoulderL.y);
+        g2d.fillOval((int) (headCenter.x - headRadius), (int) (headCenter.y - headRadius), (int) (2 * headRadius), (int) (2 * headRadius));
+
+        g2d.setColor(Color.RED);
         g2d.drawLine((int) neck.x, (int) neck.y, (int) shoulderR.x, (int) shoulderR.y);
-        g2d.drawLine((int) shoulderL.x, (int) shoulderL.y, (int) elbowL.x, (int) elbowL.y);
-        g2d.drawLine((int) elbowL.x, (int) elbowL.y, (int) wristL.x, (int) wristL.y);
         g2d.drawLine((int) shoulderR.x, (int) shoulderR.y, (int) elbowR.x, (int) elbowR.y);
         g2d.drawLine((int) elbowR.x, (int) elbowR.y, (int) wristR.x, (int) wristR.y);
-        g2d.drawLine((int) hip.x, (int) hip.y, (int) kneeL.x, (int) kneeL.y);
-        g2d.drawLine((int) kneeL.x, (int) kneeL.y, (int) footL.x, (int) footL.y);
         g2d.drawLine((int) hip.x, (int) hip.y, (int) kneeR.x, (int) kneeR.y);
         g2d.drawLine((int) kneeR.x, (int) kneeR.y, (int) footR.x, (int) footR.y);
-        g2d.fillOval((int) (headCenter.x - headRadius), (int) (headCenter.y - headRadius), (int) (2 * headRadius), (int) (2 * headRadius));
     }
 }
