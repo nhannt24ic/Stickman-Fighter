@@ -46,7 +46,6 @@ public class GameScreen extends JPanel implements ActionListener {
     private void initGameObjects() {
         // Khởi tạo nhân vật
         player1 = new StickmanCharacter(100, screenHeight - 100, Color.BLACK); // y là đáy của nhân vật
-        // player2 = new StickmanCharacter(screenWidth - 90, screenHeight - 100, 40, 80, Color.RED);
     }
 
     public void startGameLoop() {
@@ -54,21 +53,18 @@ public class GameScreen extends JPanel implements ActionListener {
         gameLoopTimer.start();
     }
 
-    // Phương thức này được gọi bởi Timer trong game loop
     @Override
     public void actionPerformed(ActionEvent e) {
         updateGame();
-        repaint(); // Yêu cầu Swing vẽ lại JPanel (gọi paintComponent)
+        repaint();
     }
 
     private void updateGame() {
-        // Cập nhật trạng thái của các đối tượng trong game
         if (player1 != null) {
             player1.update(inputHandler, screenWidth, screenHeight);
         }
     }
 
-    // Đây là nơi tất cả việc vẽ diễn ra
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g); // Vẽ nền (background color)
@@ -85,8 +81,6 @@ public class GameScreen extends JPanel implements ActionListener {
 
     }
 
-    // Lớp InputHandler lồng vào hoặc riêng biệt đều được
-    // Sử dụng KeyAdapter để không phải override tất cả các phương thức của KeyListener
     public static class InputHandler extends KeyAdapter {
         private boolean moveLeft = false;
         private boolean moveRight = false;
@@ -119,16 +113,20 @@ public class GameScreen extends JPanel implements ActionListener {
                 moveRight = false;
             }
             if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP || key == KeyEvent.VK_SPACE) {
-                jump = false; // Xử lý jump có thể cần logic phức tạp hơn là chỉ giữ trạng thái
+                jump = false;
             }
         }
 
-        public boolean isMoveLeft() { return moveLeft; }
-        public boolean isMoveRight() { return moveRight; }
+        public boolean isMoveLeft() {
+            return moveLeft;
+        }
+
+        public boolean isMoveRight() {
+            return moveRight;
+        }
+
         public boolean isJumpPressed() { // Có thể đổi tên để rõ ràng hơn là một lần nhấn
             boolean currentJumpState = jump;
-            // Nếu jump là hành động một lần, reset nó sau khi kiểm tra
-            // if (jump) jump = false;
             return currentJumpState;
         }
     }

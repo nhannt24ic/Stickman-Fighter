@@ -83,7 +83,7 @@ public class StickmanCharacter {
     // --- 1. Xử lý Input và cập nhật góc (Animation) ---
         if (inputHandler.isMoveLeft() || inputHandler.isMoveRight()) {
             this.torsoAngle = Math.toRadians(15);
-            double time = System.currentTimeMillis() / 100.0;
+            double time = System.currentTimeMillis() / 60.0;
             double hipSwingAmplitude = Math.toRadians(35);
             double shoulderSwingAmplitude = Math.toRadians(40);
             this.hipLAngle = Math.toRadians(115) + Math.sin(time) * hipSwingAmplitude;
