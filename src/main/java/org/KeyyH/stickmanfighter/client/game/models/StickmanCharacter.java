@@ -51,10 +51,12 @@ public class StickmanCharacter {
     private double currentVerticalSpeed = 0;
     private int groundLevel;
 
-    private List<Pose> runCycleKeyframes;
+    private List<Pose> runRightKeyframes;
+    private List<Pose> runLeftKeyframes;
     private int currentRunFrame = 0;
     private long lastFrameTime = 0;
     private final int TIME_PER_RUN_FRAME = 40; // 120ms mỗi "ảnh", càng nhỏ càng nhanh
+    private boolean isFacingRight;
 
     public StickmanCharacter(double rootX, double rootY, Color characterColor) {
         this.rootX = rootX;
@@ -68,33 +70,60 @@ public class StickmanCharacter {
         kneeL = new Point2D.Double(); footL = new Point2D.Double();
         kneeR = new Point2D.Double(); footR = new Point2D.Double();
 
-        initializeKeyframes();
+        this.isFacingRight = true;
+
+        initializeRunRightKeyframes(); // Khởi tạo keyframe chạy phải
+        initializeRunLeftKeyframes();  // Khởi tạo keyframe chạy trái
         setToIdlePose();
     }
 
-    private void initializeKeyframes() {
-        runCycleKeyframes = new ArrayList<>();
+    private void initializeRunLeftKeyframes(){
+        runLeftKeyframes = new ArrayList<>();
+        // Lặp qua từng pose của chạy phải để tạo ra pose chạy trái tương ứng
+        for (Pose rightPose : runRightKeyframes) {
+            // Lật góc theo độ (degrees) trước khi chuyển sang radian
+            double torso = -Math.toDegrees(rightPose.torso);
+            double neck = Math.toDegrees(rightPose.neck);
+
+            // Tráo đổi và lật gương tay
+            double shoulderL = 180 - Math.toDegrees(rightPose.shoulderR);
+            double elbowL = Math.toDegrees(rightPose.elbowR);
+            double shoulderR = 180 - Math.toDegrees(rightPose.shoulderL);
+            double elbowR = Math.toDegrees(rightPose.elbowL);
+
+            // Tráo đổi và lật gương chân
+            double hipL = 180 - Math.toDegrees(rightPose.hipR);
+            double kneeL = Math.toDegrees(rightPose.kneeR);
+            double hipR = 180 - Math.toDegrees(rightPose.hipL);
+            double kneeR = Math.toDegrees(rightPose.kneeL);
+
+            runLeftKeyframes.add(new Pose(torso, neck, shoulderL, elbowL, shoulderR, elbowR, hipL, kneeL, hipR, kneeR));
+        }
+    }
+
+    private void initializeRunRightKeyframes() {
+        runRightKeyframes = new ArrayList<>();
         
         // Keyframe 1:
-        runCycleKeyframes.add(new Pose(40, 0,  135, -20, 0, -110, 135, 10, 20, 80));
+        runRightKeyframes.add(new Pose(40, 0,  135, -20, 0, -110, 135, 10, 20, 80));
         
         // Keyframe 2:
-        runCycleKeyframes.add(new Pose(40, 0,  125, -40, 30, -110, 125, 20, 35, 90));
+        runRightKeyframes.add(new Pose(40, 0,  125, -40, 30, -110, 125, 20, 35, 90));
         
         // Keyframe 3:
-        runCycleKeyframes.add(new Pose(40, 0,  115, -90, 70, -110,   100, 40,   50, 70));
+        runRightKeyframes.add(new Pose(40, 0,  115, -90, 70, -110,   100, 40,   50, 70));
 
         //keyframe 0:
-        runCycleKeyframes.add(new Pose(40, 0,  100, -110, 100, -110,   70, 50,   70, 50));
+        runRightKeyframes.add(new Pose(40, 0,  100, -110, 100, -110,   70, 50,   70, 50));
 
         // Keyframe 4: != frame 3
-        runCycleKeyframes.add(new Pose(40, 0,  70, -110, 115, -90,   50, 70,   100, 40));
+        runRightKeyframes.add(new Pose(40, 0,  70, -110, 115, -90,   50, 70,   100, 40));
 
         // Keyframe 5: != frame 2
-        runCycleKeyframes.add(new Pose(40, 0,  30, -110, 125, -40,   35, 90,   125, 20));
+        runRightKeyframes.add(new Pose(40, 0,  30, -110, 125, -40,   35, 90,   125, 20));
         
         // Keyframe 6: != frame 1
-        runCycleKeyframes.add(new Pose(40, 0,  0, -110, 135, -20, 20, 80, 135, 10));
+        runRightKeyframes.add(new Pose(40, 0,  0, -110, 135, -20, 20, 80, 135, 10));
     }
 
     private void applyPose(Pose pose) {
@@ -127,8 +156,14 @@ public class StickmanCharacter {
 
     public void update(GameScreen.InputHandler inputHandler, int screenWidth, int screenHeight) {
         // --- 1. Xử lý vật lý (Di chuyển & Trọng lực) ---
-        if (inputHandler.isMoveLeft()) rootX -= speedX;
-        if (inputHandler.isMoveRight()) rootX += speedX;
+        if (inputHandler.isMoveLeft()) {
+            rootX -= speedX;
+            isFacingRight = false;
+        }
+        if (inputHandler.isMoveRight()) {
+            rootX += speedX;
+            isFacingRight = true;
+        }
 
         if (inputHandler.isJumpPressed() && !isJumping) {
             isJumping = true;
@@ -142,10 +177,15 @@ public class StickmanCharacter {
             if (!isJumping) { // Chỉ chạy animation chạy khi đang trên mặt đất
                 long currentTime = System.currentTimeMillis();
                 if (currentTime - lastFrameTime > TIME_PER_RUN_FRAME) {
-                    // Đã đến lúc chuyển sang keyframe tiếp theo
                     lastFrameTime = currentTime;
-                    currentRunFrame = (currentRunFrame + 1) % runCycleKeyframes.size(); // Quay vòng animation
-                    applyPose(runCycleKeyframes.get(currentRunFrame));
+                    // 1. Chọn đúng danh sách keyframe dựa trên hướng di chuyển
+                    List<Pose> currentAnimation = isFacingRight ? runRightKeyframes : runLeftKeyframes;
+                    
+                    // 2. Chuyển sang frame tiếp theo trong danh sách đã chọn
+                    currentRunFrame = (currentRunFrame + 1) % currentAnimation.size();
+                    
+                    // 3. Áp dụng tư thế từ danh sách đã chọn
+                    applyPose(currentAnimation.get(currentRunFrame));
                 }
             }
         } else {
