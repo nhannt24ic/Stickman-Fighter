@@ -14,7 +14,12 @@ public class StickmanCharacter {
     public double rootX, rootY;
     private Color characterColor;
     private float lineWidth = 6f;
-    private double speedX = 6.0; // Tốc độ di chuyển ngang
+    private double speedX = 10.0; // Tốc độ di chuyển ngang
+    private boolean isJumping = false;
+    private double jumpInitialSpeed = -15.0;
+    private double gravity = 1.0;
+    private double currentVerticalSpeed = 0;
+    private int groundLevel;
 
     // Kích thước
     private final double headRadius = 17;
@@ -44,18 +49,15 @@ public class StickmanCharacter {
     private double hipRAngle;
     private double kneeRAngle;
 
-    // Trạng thái nhảy
-    private boolean isJumping = false;
-    private double jumpInitialSpeed = -12.0;
-    private double gravity = 0.5;
-    private double currentVerticalSpeed = 0;
-    private int groundLevel;
-
     private List<Pose> runRightKeyframes;
     private List<Pose> runLeftKeyframes;
-    private int currentRunFrame = 0;
+    private List<Pose> jumpKeyframes;
+
+    private List<Pose> currentAnimation;
+    private long currentTime;
     private long lastFrameTime = 0;
-    private final int TIME_PER_RUN_FRAME = 40; // 120ms mỗi "ảnh", càng nhỏ càng nhanh
+    private int currentRunFrame = -1;
+    private final int TIME_PER_RUN_FRAME = 25;
     private boolean isFacingRight;
 
     public StickmanCharacter(double rootX, double rootY, Color characterColor) {
@@ -72,31 +74,31 @@ public class StickmanCharacter {
 
         this.isFacingRight = true;
 
-        initializeRunRightKeyframes(); // Khởi tạo keyframe chạy phải
-        initializeRunLeftKeyframes();  // Khởi tạo keyframe chạy trái
+        initializeRunRightKeyframes();
+        initializeRunLeftKeyframes();
+        initializeJumpKeyframes();
         setToIdlePose();
     }
 
     private void initializeRunLeftKeyframes(){
         runLeftKeyframes = new ArrayList<>();
-        // Lặp qua từng pose của chạy phải để tạo ra pose chạy trái tương ứng
+  
         for (Pose rightPose : runRightKeyframes) {
-            // Lật góc theo độ (degrees) trước khi chuyển sang radian
             double torso = -Math.toDegrees(rightPose.torso);
-            double neck = Math.toDegrees(rightPose.neck);
+            double neck = -Math.toDegrees(rightPose.neck);
 
-            // Tráo đổi và lật gương tay
+            // Lật gương các chi chính (vai, hông)
             double shoulderL = 180 - Math.toDegrees(rightPose.shoulderR);
-            double elbowL = Math.toDegrees(rightPose.elbowR);
             double shoulderR = 180 - Math.toDegrees(rightPose.shoulderL);
-            double elbowR = Math.toDegrees(rightPose.elbowL);
-
-            // Tráo đổi và lật gương chân
             double hipL = 180 - Math.toDegrees(rightPose.hipR);
-            double kneeL = Math.toDegrees(rightPose.kneeR);
             double hipR = 180 - Math.toDegrees(rightPose.hipL);
-            double kneeR = Math.toDegrees(rightPose.kneeL);
-
+            
+            // Tráo đổi các góc tương đối (khuỷu tay, đầu gối)
+            double elbowL = - Math.toDegrees(rightPose.elbowR);
+            double elbowR = - Math.toDegrees(rightPose.elbowL);
+            double kneeL = - Math.toDegrees(rightPose.kneeR);
+            double kneeR = - Math.toDegrees(rightPose.kneeL);
+            
             runLeftKeyframes.add(new Pose(torso, neck, shoulderL, elbowL, shoulderR, elbowR, hipL, kneeL, hipR, kneeR));
         }
     }
@@ -104,26 +106,27 @@ public class StickmanCharacter {
     private void initializeRunRightKeyframes() {
         runRightKeyframes = new ArrayList<>();
         
-        // Keyframe 1:
-        runRightKeyframes.add(new Pose(40, 0,  135, -20, 0, -110, 135, 10, 20, 80));
-        
-        // Keyframe 2:
-        runRightKeyframes.add(new Pose(40, 0,  125, -40, 30, -110, 125, 20, 35, 90));
-        
-        // Keyframe 3:
-        runRightKeyframes.add(new Pose(40, 0,  115, -90, 70, -110,   100, 40,   50, 70));
+        runRightKeyframes.add(new Pose(50, 0,  175 - 50 , -20, 40 - 40-10 , -110, 135, 10, 20, 80));
+        runRightKeyframes.add(new Pose(50, 0,  125 -10, -40, 30-10, -110, 125, 20, 35, 90));
+        runRightKeyframes.add(new Pose(50, 0,  115-10, -90, 70-10, -110,   100, 40,   50, 70));
+        runRightKeyframes.add(new Pose(50, 0,  100-10, -110, 100-10, -110,   70, 50,   70, 50));
+        runRightKeyframes.add(new Pose(50, 0,  70-10, -110, 115-10, -90,   50, 70,   100, 40));
+        runRightKeyframes.add(new Pose(50, 0,  30-10, -110, 125-10, -40,   35, 90,   125, 20));
+        runRightKeyframes.add(new Pose(50, 0,  0-10, -110, 135-10, -20, 20, 80, 135, 10));
 
-        //keyframe 0:
-        runRightKeyframes.add(new Pose(40, 0,  100, -110, 100, -110,   70, 50,   70, 50));
+    }
 
-        // Keyframe 4: != frame 3
-        runRightKeyframes.add(new Pose(40, 0,  70, -110, 115, -90,   50, 70,   100, 40));
-
-        // Keyframe 5: != frame 2
-        runRightKeyframes.add(new Pose(40, 0,  30, -110, 125, -40,   35, 90,   125, 20));
+    private void initializeJumpKeyframes() {
+        jumpKeyframes = new ArrayList<>();
         
-        // Keyframe 6: != frame 1
-        runRightKeyframes.add(new Pose(40, 0,  0, -110, 135, -20, 20, 80, 135, 10));
+        jumpKeyframes.add(new Pose(0, 0, 190, -80, -10, 80, 160, -90, 20, 90));
+        jumpKeyframes.add(new Pose(0, 0, 200, -30, -20, 30, 210, -140, -30, 140));
+        jumpKeyframes.add(new Pose(0, 0, 200, -50, -20, 50, 200, -120, -20, 120));
+        jumpKeyframes.add(new Pose(0, 0, 170, -40, 10, 40, 160, -90, 20, 90));
+        jumpKeyframes.add(new Pose(0, 0, 150, -50, 30, 50, 160, -60, 20, 60));
+        jumpKeyframes.add(new Pose(0, 0, 135, -30, 45, 30, 130, -30, 50, 30));
+        jumpKeyframes.add(new Pose(0, 0, 125, -10, 55, 10, 115, -5, 65, 5));
+
     }
 
     private void applyPose(Pose pose) {
@@ -155,48 +158,74 @@ public class StickmanCharacter {
     }
 
     public void update(GameScreen.InputHandler inputHandler, int screenWidth, int screenHeight) {
-        // --- 1. Xử lý vật lý (Di chuyển & Trọng lực) ---
-        if (inputHandler.isMoveLeft()) {
-            rootX -= speedX;
-            isFacingRight = false;
-        }
-        if (inputHandler.isMoveRight()) {
-            rootX += speedX;
-            isFacingRight = true;
+        // Ưu tiên động tác: NHẢY > các động tác khác > CHẠY
+        currentTime = System.currentTimeMillis();
+        boolean wantJump = inputHandler.isJumpPressed();
+        boolean wantMove = inputHandler.isMoveLeft() || inputHandler.isMoveRight();
+        boolean allowMove = true;
+
+        // Kiểm tra đang ở trên mặt đất (grounded)
+        boolean isGrounded = (Math.max(footL.y, footR.y) >= groundLevel - 25);
+
+        // Nếu đang nhảy trước (isJumping == true trước khi xử lý input), không cho di chuyển ngang
+        if (isJumping || !isGrounded) {
+            allowMove = false;
         }
 
-        if (inputHandler.isJumpPressed() && !isJumping) {
+        // Xử lý nhảy (ưu tiên cao nhất, chỉ cho nhảy khi đang trên mặt đất)
+        if (wantJump && !isJumping && isGrounded) {
             isJumping = true;
             currentVerticalSpeed = jumpInitialSpeed;
+            currentRunFrame = 0; // Bắt đầu lại animation nhảy
+            lastFrameTime = currentTime;
         }
-        rootY += currentVerticalSpeed;
-        currentVerticalSpeed += gravity;
-        
-        // --- 2. Xử lý animation và trạng thái ---
-        if (inputHandler.isMoveLeft() || inputHandler.isMoveRight()) {
-            if (!isJumping) { // Chỉ chạy animation chạy khi đang trên mặt đất
-                long currentTime = System.currentTimeMillis();
-                if (currentTime - lastFrameTime > TIME_PER_RUN_FRAME) {
-                    lastFrameTime = currentTime;
-                    // 1. Chọn đúng danh sách keyframe dựa trên hướng di chuyển
-                    List<Pose> currentAnimation = isFacingRight ? runRightKeyframes : runLeftKeyframes;
-                    
-                    // 2. Chuyển sang frame tiếp theo trong danh sách đã chọn
-                    currentRunFrame = (currentRunFrame + 1) % currentAnimation.size();
-                    
-                    // 3. Áp dụng tư thế từ danh sách đã chọn
-                    applyPose(currentAnimation.get(currentRunFrame));
-                }
+
+        // Nếu được phép di chuyển ngang (chỉ khi không nhảy trước)
+        if (allowMove) {
+            if (inputHandler.isMoveLeft()) {
+                rootX -= speedX;
+                isFacingRight = false;
             }
-        } else {
-            // Nếu không di chuyển, quay về tư thế nghỉ
-            currentRunFrame = 0; // Reset animation để lần chạy tiếp theo bắt đầu từ frame đầu
-            if (!isJumping) {
-                setToIdlePose();
+            if (inputHandler.isMoveRight()) {
+                rootX += speedX;
+                isFacingRight = true;
             }
         }
 
-        // --- 3. Cập nhật lại toàn bộ "bộ xương" và xử lý va chạm ---
+        // Xử lý trọng lực
+        rootY += currentVerticalSpeed;
+        currentVerticalSpeed += gravity;
+
+        // --- Animation: Ưu tiên động tác ---
+        if (isJumping) {
+            // Animation nhảy chỉ chạy 1 vòng, hết thì về idle
+            if (currentTime - lastFrameTime >= TIME_PER_RUN_FRAME + 20) {
+                lastFrameTime = currentTime;
+                currentAnimation = jumpKeyframes;
+                if (currentRunFrame < currentAnimation.size()) {
+                    applyPose(currentAnimation.get(currentRunFrame));
+                    currentRunFrame++;
+                } else {
+                    // Đã hết animation nhảy, về idle và chờ nhấn tiếp
+                    isJumping = false;
+                    setToIdlePose();
+                    currentRunFrame = 0;
+                }
+            }
+        } else if (wantMove &&  allowMove) {
+            // Animation chạy (ưu tiên thấp hơn nhảy, lặp liên tục)
+            if (currentTime - lastFrameTime > TIME_PER_RUN_FRAME) {
+                lastFrameTime = currentTime;
+                currentAnimation = isFacingRight ? runRightKeyframes : runLeftKeyframes;
+                currentRunFrame = (currentRunFrame + 1) % currentAnimation.size();
+                applyPose(currentAnimation.get(currentRunFrame));
+            }
+        } else {
+            // Animation idle
+            currentRunFrame = 0;
+            setToIdlePose();
+        }
+
         updatePointsFromAngles();
         handleGroundCollision();
     }

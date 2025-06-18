@@ -7,8 +7,8 @@ import java.awt.EventQueue;
 
 public class MainClient {
 
-    public static final int WINDOW_WIDTH = 800;
-    public static final int WINDOW_HEIGHT = 500;
+    public static final int WINDOW_WIDTH = 1400;
+    public static final int WINDOW_HEIGHT = 600;
 
     public static void main(String[] args) {
         // Chạy GUI trên Event Dispatch Thread (EDT) của Swing
