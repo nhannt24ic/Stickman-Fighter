@@ -1,6 +1,6 @@
-package org.KeyyH.stickmanfighter.client; // Thay thế bằng package của bạn
+package org.keyyh.stickmanfighter.client;
 
-import org.KeyyH.stickmanfighter.client.gui.GameScreen;
+import org.keyyh.stickmanfighter.client.gui.GameScreen;
 
 import javax.swing.JFrame;
 import java.awt.EventQueue;

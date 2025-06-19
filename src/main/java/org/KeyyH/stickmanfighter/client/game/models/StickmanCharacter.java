@@ -1,7 +1,7 @@
-package org.KeyyH.stickmanfighter.client.game.models;
+package org.keyyh.stickmanfighter.client.game.models;
 
-import org.KeyyH.stickmanfighter.client.game.animation.Pose;
-import org.KeyyH.stickmanfighter.client.gui.GameScreen;
+import org.keyyh.stickmanfighter.client.game.animation.Pose;
+import org.keyyh.stickmanfighter.client.gui.GameScreen;
 
 import java.awt.Color;
 import java.awt.Graphics2D;

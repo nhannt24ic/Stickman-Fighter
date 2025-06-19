@@ -1,4 +1,4 @@
-package org.KeyyH.stickmanfighter.client.game.animation;
+package org.keyyh.stickmanfighter.client.game.animation;
 
 public class Pose {
     // Sử dụng public final để tạo một đối tượng dữ liệu đơn giản và bất biến (immutable)

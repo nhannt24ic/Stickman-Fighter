@@ -1,6 +1,6 @@
-package org.KeyyH.stickmanfighter.client.gui;
+package org.keyyh.stickmanfighter.client.gui;
 
-import org.KeyyH.stickmanfighter.client.game.models.StickmanCharacter;
+import org.keyyh.stickmanfighter.client.game.models.StickmanCharacter;
 
 import javax.swing.JPanel;
 import javax.swing.Timer;

@@ -1,4 +1,4 @@
-package org.KeyyH.stickmanfighter.server;
+package org.keyyh.stickmanfighter.server;
 
 public class MainServer {
 }
