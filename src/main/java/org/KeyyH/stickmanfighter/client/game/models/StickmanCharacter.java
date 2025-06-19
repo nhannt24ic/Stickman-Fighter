@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class StickmanCharacter {
+    private final boolean isAI;
+
     public double rootX, rootY;
     private Color characterColor;
     private float lineWidth = 6f;
@@ -20,12 +22,14 @@ public class StickmanCharacter {
     private double gravity = 1.0;
     private double currentVerticalSpeed = 0;
     private int groundLevel;
+    private boolean isGrounded;
+    private boolean isFacingRight;
 
     // Kích thước
     private final double headRadius = 17;
     private final double torsoLength = 60;
     private final double neckLength = 17;
-    private final double shoulderWidthFromBodyCenter = 2; // Bạn đã khôi phục lại vai
+    private final double shoulderWidthFromBodyCenter = 2;
     private final double upperArmLength = 40;
     private final double lowerArmLength = 35;
     private final double thighLength = 50;
@@ -58,12 +62,12 @@ public class StickmanCharacter {
     private long lastFrameTime = 0;
     private int currentRunFrame = -1;
     private final int TIME_PER_RUN_FRAME = 25;
-    private boolean isFacingRight;
 
-    public StickmanCharacter(double rootX, double rootY, Color characterColor) {
+    public StickmanCharacter(double rootX, double rootY, Color characterColor, boolean isAI) {
         this.rootX = rootX;
         this.rootY = rootY;
         this.characterColor = characterColor;
+        this.isAI = isAI;
         this.groundLevel = (int) rootY + (int)(thighLength + calfLength);
 
         hip = new Point2D.Double(); neck = new Point2D.Double(); headCenter = new Point2D.Double();
@@ -71,8 +75,6 @@ public class StickmanCharacter {
         shoulderR = new Point2D.Double(); elbowR = new Point2D.Double(); wristR = new Point2D.Double();
         kneeL = new Point2D.Double(); footL = new Point2D.Double();
         kneeR = new Point2D.Double(); footR = new Point2D.Double();
-
-        this.isFacingRight = true;
 
         initializeRunRightKeyframes();
         initializeRunLeftKeyframes();
@@ -157,15 +159,16 @@ public class StickmanCharacter {
         updatePointsFromAngles(); 
     }
 
-    public void update(GameScreen.InputHandler inputHandler, int screenWidth, int screenHeight) {
+    public void updatePlayer(GameScreen.InputHandler inputHandler, int screenWidth, int screenHeight) {
+
+        // inputHandler.printInputState();
         // Ưu tiên động tác: NHẢY > các động tác khác > CHẠY
         currentTime = System.currentTimeMillis();
         boolean wantJump = inputHandler.isJumpPressed();
         boolean wantMove = inputHandler.isMoveLeft() || inputHandler.isMoveRight();
         boolean allowMove = true;
 
-        // Kiểm tra đang ở trên mặt đất (grounded)
-        boolean isGrounded = (Math.max(footL.y, footR.y) >= groundLevel - 25);
+        isGrounded= (Math.max(footL.y, footR.y) >= groundLevel - 25);
 
         // Nếu đang nhảy trước (isJumping == true trước khi xử lý input), không cho di chuyển ngang
         if (isJumping || !isGrounded) {
@@ -228,9 +231,88 @@ public class StickmanCharacter {
 
         updatePointsFromAngles();
         handleGroundCollision();
+
+        double minX = headRadius;
+        double maxX = screenWidth - headRadius;
+        double minY = headRadius;
+        double maxY = screenHeight - headRadius;
+        if (rootX < minX) rootX = minX;
+        if (rootX > maxX) rootX = maxX;
+        if (rootY < minY) rootY = minY;
+        if (rootY > maxY) rootY = maxY;
     }
-    
-    // --- PHƯƠNG THỨC TIỆN ÍCH ĐÃ ĐƯỢC THÊM VÀO ---
+
+    public void updateAI(StickmanCharacter target, int screenWidth, int screenHeight) {
+        currentTime = System.currentTimeMillis();
+        double distanceToTarget = target.rootX - this.rootX;
+        boolean shouldMove = false;
+        isGrounded = (Math.max(footL.y, footR.y) >= groundLevel - 25);
+
+        if (!isJumping) {
+            if (Math.abs(distanceToTarget) > 150) {
+                shouldMove = true;
+                if (distanceToTarget > 0) {
+                    rootX += speedX;
+                    isFacingRight = true;
+                } else {
+                    rootX -= speedX;
+                    isFacingRight = false;
+                }
+            } else {
+                shouldMove = false;
+                isFacingRight = (distanceToTarget > 0);
+            }
+        }
+
+        if (!isJumping && isGrounded && Math.abs(distanceToTarget) < 200 && Math.random() < 0.01) {
+            isJumping = true;
+            currentVerticalSpeed = jumpInitialSpeed;
+            currentRunFrame = 0;
+            lastFrameTime = currentTime;
+        }
+
+        // Vật lý
+        rootY += currentVerticalSpeed;
+        currentVerticalSpeed += gravity;
+
+        // Animation
+        if (isJumping) {
+            if (currentTime - lastFrameTime >= TIME_PER_RUN_FRAME + 20) {
+                lastFrameTime = currentTime;
+                if (currentRunFrame < jumpKeyframes.size()) {
+                    applyPose(jumpKeyframes.get(currentRunFrame));
+                    currentRunFrame++;
+                } else {
+                    isJumping = false;
+                    setToIdlePose();
+                    currentRunFrame = 0;
+                }
+            }
+        } else if (shouldMove) {
+            if (currentTime - lastFrameTime > TIME_PER_RUN_FRAME) {
+                lastFrameTime = currentTime;
+                List<Pose> anim = isFacingRight ? runRightKeyframes : runLeftKeyframes;
+                currentRunFrame = (currentRunFrame + 1) % anim.size();
+                applyPose(anim.get(currentRunFrame));
+            }
+        } else {
+            currentRunFrame = 0;
+            setToIdlePose();
+        }
+
+        updatePointsFromAngles();
+        handleGroundCollision();
+
+        double minX = headRadius;
+        double maxX = screenWidth - headRadius;
+        double minY = headRadius;
+        double maxY = screenHeight - headRadius;
+        if (rootX < minX) rootX = minX;
+        if (rootX > maxX) rootX = maxX;
+        if (rootY < minY) rootY = minY;
+        if (rootY > maxY) rootY = maxY;
+    }
+
     private void handleGroundCollision() {
         // Tìm xem bàn chân nào ở vị trí thấp nhất
         double deepestFootY = Math.max(footL.y, footR.y);
@@ -303,5 +385,9 @@ public class StickmanCharacter {
         g2d.drawLine((int) elbowR.x, (int) elbowR.y, (int) wristR.x, (int) wristR.y);
         g2d.drawLine((int) hip.x, (int) hip.y, (int) kneeR.x, (int) kneeR.y);
         g2d.drawLine((int) kneeR.x, (int) kneeR.y, (int) footR.x, (int) footR.y);
+    }
+
+    public boolean isAI() {
+        return isAI;
     }
 }
